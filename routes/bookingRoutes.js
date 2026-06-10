@@ -7,11 +7,16 @@ const {
   getSupervisorBookings,
   getUserBookings,
   getSingleBooking,
-  updatePaymentStatus,      // Finance updates payment
-  updateBookingStatus,      // Service Manager updates booking
+  updatePaymentStatus,
+  updateBookingStatus,
   deleteBooking,
   assignSupervisor,
+  assignDealers,
   updateWorkStatus,
+  submitRatingAndFeedback,  // ← UPDATED: changed from confirmEventCompletion
+  updateLogistics,
+  updateFinanceStatus,
+  getBookingStats,
 } = require("../controllers/bookingController");
 
 // ===============================
@@ -40,6 +45,11 @@ router.get("/user/:userId", getUserBookings);
 router.get("/:id", getSingleBooking);
 
 // ===============================
+// GET BOOKING STATISTICS
+// ===============================
+router.get("/stats/all", getBookingStats);
+
+// ===============================
 // UPDATE PAYMENT STATUS (FINANCE ONLY)
 // ===============================
 router.put("/:id/payment-status", updatePaymentStatus);
@@ -55,9 +65,29 @@ router.put("/:id/status", updateBookingStatus);
 router.put("/:id/assign", assignSupervisor);
 
 // ===============================
-// UPDATE WORK STATUS
+// ASSIGN DEALERS
+// ===============================
+router.put("/:id/assign-dealers", assignDealers);
+
+// ===============================
+// UPDATE WORK STATUS (SUPERVISOR)
 // ===============================
 router.put("/:id/work-status", updateWorkStatus);
+
+// ===============================
+// SUBMIT RATING AND FEEDBACK (CUSTOMER) - NO OTP
+// ===============================
+router.post("/:id/confirm", submitRatingAndFeedback);  // ← UPDATED function name
+
+// ===============================
+// UPDATE LOGISTICS
+// ===============================
+router.put("/:id/logistics", updateLogistics);
+
+// ===============================
+// UPDATE FINANCE STATUS
+// ===============================
+router.put("/:id/finance-status", updateFinanceStatus);
 
 // ===============================
 // DELETE BOOKING

@@ -1,8 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const inventoryRoutes = require("./routes/inventoryRoutes");
 require("dotenv").config();
+
+const inventoryRoutes = require("./routes/inventoryRoutes");
 
 const app = express();
 
@@ -14,14 +15,14 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`📡 ${req.method} ${req.url}`);
   if (req.body && Object.keys(req.body).length > 0) {
-    console.log('📦 Body:', JSON.stringify(req.body, null, 2));
+    console.log("📦 Body:", JSON.stringify(req.body, null, 2));
   }
   next();
 });
 
-// Test route
+// Health check route (VERY IMPORTANT for Render)
 app.get("/", (req, res) => {
-  res.send("Casino Night Rentals Backend is running 🚀");
+  res.status(200).send("Casino Night Rentals Backend is running 🚀");
 });
 
 // API Routes
@@ -34,15 +35,7 @@ app.use("/api/finance", require("./routes/financeRoutes"));
 app.use("/api/supervisors", require("./routes/supervisorRoutes"));
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/supplier", require("./routes/supplierRoutes"));
-
-// Global error handler (CATCHES all errors)
-app.use((err, req, res, next) => {
-  console.error('❌ Global error handler:', err);
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-  });
-});
+app.use("/api/chat", require("./routes/chatRoutes")); // Added chat routes
 
 // 404 handler
 app.use((req, res) => {
@@ -52,20 +45,38 @@ app.use((req, res) => {
   });
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("❌ Global error:", err);
+  res.status(500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
+// 🔥 IMPORTANT: Safe MongoDB + server start
+async function startServer() {
+  try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not defined in environment variables");
+    }
+
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected successfully ✅");
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT} 🚀`);
-      console.log(`📦 Inventory API: http://localhost:${PORT}/api/inventory`);
-      console.log(`💰 Finance API: http://localhost:${PORT}/api/finance`);
-      console.log(`📋 Supplier API: http://localhost:${PORT}/api/supplier`);
+      console.log(`📦 Inventory API: /api/inventory`);
+      console.log(`💰 Finance API: /api/finance`);
+      console.log(`📋 Supplier API: /api/supplier`);
+      console.log(`💬 Chat API: /api/chat`);
     });
-  })
-  .catch((err) => {
-    console.log("MongoDB connection error ❌");
-    console.log(err);
-  });
+  } catch (err) {
+    console.error("❌ Server failed to start:", err.message);
+    process.exit(1);
+  }
+}
+
+startServer();

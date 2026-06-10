@@ -2,7 +2,7 @@ const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
 
 // =====================================
-// ✅ CREATE BOOKING
+// ✅ CREATE BOOKING (FULLY UPDATED)
 // =====================================
 const createBooking = async (req, res) => {
   console.log("═══════════════════════════════════");
@@ -18,10 +18,25 @@ const createBooking = async (req, res) => {
       phone,
       gameId,
       gameTitle,
+      basePrice,
       price,
       eventDate,
+      eventTime,
       location,
+      county,
+      city,
+      venue,
       guests,
+      specialRequests,
+      eventDuration,
+      dealersNeeded,
+      dealerCost,
+      transportFee,
+      accommodationFee,
+      subtotal,
+      serviceFee,
+      totalAmount,
+      durationMultiplier,
       paymentMethod,
       paymentStatus,
       transactionCode,
@@ -29,101 +44,84 @@ const createBooking = async (req, res) => {
       mpesaPhoneNumber,
       mpesaAmount,
       paidAmount,
+      remainingBalance,
+      notes,
     } = req.body;
 
     if (!userId) {
-      console.log("❌ Missing userId");
-      return res.status(400).json({
-        success: false,
-        message: "userId is required",
-      });
+      return res.status(400).json({ success: false, message: "userId is required" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      console.log("❌ Invalid userId format:", userId);
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID format",
-      });
+      return res.status(400).json({ success: false, message: "Invalid user ID format" });
     }
 
-    console.log("✅ All validations passed");
+    if (!customerName || !email || !phone) {
+      return res.status(400).json({ success: false, message: "Customer name, email, and phone are required" });
+    }
 
-    const priceNum = price ? parseFloat(price) : 0;
-    const paidAmountNum = paidAmount ? parseFloat(paidAmount) : (priceNum * 1.05);
-    const mpesaAmountNum = mpesaAmount ? parseFloat(mpesaAmount) : (priceNum * 1.05);
-    const calculatedRemainingBalance = priceNum - paidAmountNum;
+    const finalBasePrice = basePrice || price || 0;
+    const finalDealersNeeded = dealersNeeded || 1;
+    const finalDealerCost = dealerCost || (finalDealersNeeded * 2000);
+    const finalDurationMultiplier = durationMultiplier || 1;
+    const finalTransportFee = transportFee || 0;
+    const finalAccommodationFee = accommodationFee || 0;
     
-    console.log(`💰 Price: ${priceNum}, Paid: ${paidAmountNum}, Remaining: ${calculatedRemainingBalance}`);
+    let finalSubtotal = subtotal || ((finalBasePrice + finalDealerCost) * finalDurationMultiplier);
+    let finalServiceFee = serviceFee || (finalSubtotal * 0.05);
+    let finalTotalAmount = totalAmount || (finalSubtotal + finalServiceFee + finalTransportFee + finalAccommodationFee);
+    const finalPaidAmount = paidAmount || finalTotalAmount;
+    const finalRemainingBalance = remainingBalance !== undefined ? remainingBalance : finalTotalAmount - finalPaidAmount;
 
     const bookingData = {
       userId: new mongoose.Types.ObjectId(userId),
-      customerName: customerName || "",
-      email: email || "",
-      phone: phone || "",
+      customerName: customerName.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
       gameId: gameId || "",
       gameTitle: gameTitle || "",
-      price: priceNum,
+      basePrice: finalBasePrice,
+      price: finalBasePrice,
       eventDate: eventDate || "",
-      location: location || "",
+      eventTime: eventTime || "",
+      location: location || venue || "",
+      county: county || "",
+      city: city || "",
+      venue: venue || "",
       guests: guests ? parseInt(guests) : 1,
-      status: "Pending", // Booking status (for Service Manager)
+      specialRequests: specialRequests || "",
+      eventDuration: eventDuration || "4 Hours",
+      dealersNeeded: finalDealersNeeded,
+      dealerCost: finalDealerCost,
+      transportFee: finalTransportFee,
+      accommodationFee: finalAccommodationFee,
+      subtotal: finalSubtotal,
+      serviceFee: finalServiceFee,
+      totalAmount: finalTotalAmount,
+      durationMultiplier: finalDurationMultiplier,
+      status: "Pending",
       workStatus: "Unassigned",
       paymentMethod: paymentMethod || "M-Pesa",
-      paymentStatus: paymentStatus || "Pending", // Payment status (for Finance)
+      paymentStatus: paymentStatus || "Pending",
       transactionCode: transactionCode ? transactionCode.toUpperCase().trim() : "",
       mpesaReceiptNumber: mpesaReceiptNumber || "",
       mpesaPhoneNumber: mpesaPhoneNumber || phone,
-      mpesaAmount: mpesaAmountNum,
-      paidAmount: paidAmountNum,
-      remainingBalance: calculatedRemainingBalance,
+      mpesaAmount: mpesaAmount || finalTotalAmount,
+      paidAmount: finalPaidAmount,
+      remainingBalance: finalRemainingBalance,
+      notes: notes || "",
     };
-
-    console.log("📝 Creating booking with data:", JSON.stringify(bookingData, null, 2));
 
     const booking = new Booking(bookingData);
     const savedBooking = await booking.save();
     
-    console.log("✅ Booking created successfully!");
-    console.log("📊 Booking ID:", savedBooking._id);
-    console.log("═══════════════════════════════════");
-
     return res.status(201).json({
       success: true,
       message: "Booking created successfully",
       booking: savedBooking,
     });
   } catch (error) {
-    console.log("═══════════════════════════════════");
-    console.log("❌ BOOKING CREATION FAILED");
-    console.log("═══════════════════════════════════");
-    console.log("Error name:", error.name);
-    console.log("Error message:", error.message);
-    
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: "Validation error",
-        errors: errors,
-      });
-    }
-    
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid ${error.path}: ${error.value}`,
-      });
-    }
-    
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Duplicate entry detected",
-        duplicateField: Object.keys(error.keyPattern)[0],
-      });
-    }
-    
+    console.error("❌ Booking creation failed:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while creating booking",
@@ -137,14 +135,11 @@ const createBooking = async (req, res) => {
 // =====================================
 const getBookings = async (req, res) => {
   try {
-    console.log("📡 Fetching all bookings");
-    
     const bookings = await Booking.find()
       .sort({ createdAt: -1 })
       .populate("userId", "name email phone")
-      .populate("assignedSupervisor", "name email phone position");
-
-    console.log(`✅ Found ${bookings.length} bookings`);
+      .populate("assignedSupervisor", "name email phone position")
+      .populate("assignedDealers", "name email phone position");
 
     return res.status(200).json({
       success: true,
@@ -167,24 +162,16 @@ const getBookings = async (req, res) => {
 const getSupervisorBookings = async (req, res) => {
   try {
     const { supervisorId } = req.params;
-    
-    console.log(`📡 Fetching bookings for supervisor: ${supervisorId}`);
 
     if (!mongoose.Types.ObjectId.isValid(supervisorId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid supervisor ID format",
-      });
+      return res.status(400).json({ success: false, message: "Invalid supervisor ID format" });
     }
 
-    const bookings = await Booking.find({
-      assignedSupervisor: supervisorId,
-    })
+    const bookings = await Booking.find({ assignedSupervisor: supervisorId })
       .populate("userId", "name email phone")
       .populate("assignedSupervisor", "name email phone position")
+      .populate("assignedDealers", "name email phone position")
       .sort({ createdAt: -1 });
-
-    console.log(`✅ Found ${bookings.length} bookings for supervisor ${supervisorId}`);
 
     return res.status(200).json({
       success: true,
@@ -207,13 +194,7 @@ const getSupervisorBookings = async (req, res) => {
 const getUserBookings = async (req, res) => {
   try {
     const { userId } = req.params;
-    
-    console.log(`📡 Fetching bookings for user: ${userId}`);
-
     const bookings = await Booking.find({ userId }).sort({ createdAt: -1 });
-
-    console.log(`✅ Found ${bookings.length} bookings for user`);
-
     return res.status(200).json({
       success: true,
       count: bookings.length,
@@ -235,22 +216,14 @@ const getUserBookings = async (req, res) => {
 const getSingleBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    console.log(`📡 Fetching booking: ${id}`);
-
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("assignedSupervisor", "name email phone position");
+      .populate("assignedSupervisor", "name email phone position")
+      .populate("assignedDealers", "name email phone position");
 
     if (!booking) {
-      console.log(`❌ Booking not found: ${id}`);
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
-
-    console.log(`✅ Booking found: ${booking._id}`);
 
     return res.status(200).json({
       success: true,
@@ -271,69 +244,48 @@ const getSingleBooking = async (req, res) => {
 // =====================================
 const updatePaymentStatus = async (req, res) => {
   try {
-    const { paymentStatus, paymentNotes, price, paidAmount, remainingBalance } = req.body;
+    const { paymentStatus, paymentNotes, paidAmount, remainingBalance } = req.body;
     const { id } = req.params;
 
-    console.log(`💰 Finance updating payment for booking ${id}`);
-    console.log(`   Payment Status: ${paymentStatus}`);
-    console.log(`   Notes: ${paymentNotes || 'No notes'}`);
-
     const booking = await Booking.findById(id);
-
     if (!booking) {
-      console.log(`❌ Booking not found: ${id}`);
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
 
-    // Validate paymentStatus
-    if (paymentStatus && !["Pending", "Approved", "Rejected", "Completed"].includes(paymentStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid paymentStatus",
-      });
+    const validStatuses = ["Pending", "Processing", "Approved", "Paid", "Failed", "Refunded"];
+    if (paymentStatus && !validStatuses.includes(paymentStatus)) {
+      return res.status(400).json({ success: false, message: "Invalid paymentStatus" });
     }
 
-    // Update payment fields
     if (paymentStatus) {
       booking.paymentStatus = paymentStatus;
       
       if (paymentStatus === "Approved" && !booking.paymentApprovedAt) {
         booking.paymentApprovedAt = new Date();
+        if (booking.status === "Approved") {
+          booking.workStatus = "Assigned";
+        }
       }
       
-      if (paymentStatus === "Rejected" && !booking.paymentRejectedAt) {
+      if (paymentStatus === "Paid" && !booking.paymentCompletedAt) {
+        booking.paymentCompletedAt = new Date();
+      }
+      
+      if (paymentStatus === "Failed" && !booking.paymentRejectedAt) {
         booking.paymentRejectedAt = new Date();
       }
     }
 
-    if (paymentNotes !== undefined) {
-      booking.paymentNotes = paymentNotes;
-    }
-    
-    // Update price and related fields if provided
-    if (price !== undefined) {
-      booking.price = Number(price);
-      if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
-      if (remainingBalance !== undefined) booking.remainingBalance = Number(remainingBalance);
-    }
+    if (paymentNotes !== undefined) booking.paymentNotes = paymentNotes;
+    if (paidAmount !== undefined) booking.paidAmount = paidAmount;
+    if (remainingBalance !== undefined) booking.remainingBalance = remainingBalance;
 
     await booking.save();
 
-    const updatedBooking = await Booking.findById(id).populate(
-      "assignedSupervisor",
-      "name email phone position"
-    );
-
-    console.log(`✅ Payment status updated successfully!`);
-    console.log(`   New Payment Status: ${updatedBooking.paymentStatus}`);
-
     return res.status(200).json({
       success: true,
-      message: `Payment ${paymentStatus === "Approved" ? "approved" : paymentStatus === "Rejected" ? "rejected" : "updated"} successfully`,
-      booking: updatedBooking,
+      message: `Payment ${paymentStatus} successfully`,
+      booking,
     });
   } catch (error) {
     console.error("❌ Error updating payment status:", error);
@@ -353,35 +305,21 @@ const updateBookingStatus = async (req, res) => {
     const { status, notes } = req.body;
     const { id } = req.params;
 
-    console.log(`📋 Service Manager updating booking status for ${id}`);
-    console.log(`   Booking Status: ${status}`);
-    console.log(`   Notes: ${notes || 'No notes'}`);
-
     const booking = await Booking.findById(id);
-
     if (!booking) {
-      console.log(`❌ Booking not found: ${id}`);
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
 
-    // Validate status
-    if (status && !["Pending", "Approved", "Rejected", "Cancelled"].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status. Must be: Pending, Approved, Rejected, or Cancelled",
-      });
+    const validStatuses = ["Pending", "Approved", "Rejected", "Cancelled"];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
     }
 
-    // Update booking status
     if (status) {
       booking.status = status;
       
       if (status === "Approved" && !booking.approvedAt) {
         booking.approvedAt = new Date();
-        // Only set workStatus to Assigned if payment is already approved
         if (booking.paymentStatus === "Approved") {
           booking.workStatus = "Assigned";
         }
@@ -390,26 +328,19 @@ const updateBookingStatus = async (req, res) => {
       if (status === "Rejected" && !booking.rejectedAt) {
         booking.rejectedAt = new Date();
       }
+      
+      if (status === "Cancelled") {
+        booking.workStatus = "Unassigned";
+      }
     }
 
-    if (notes !== undefined) {
-      booking.bookingNotes = notes;
-    }
-
+    if (notes !== undefined) booking.bookingNotes = notes;
     await booking.save();
-
-    const updatedBooking = await Booking.findById(id).populate(
-      "assignedSupervisor",
-      "name email phone position"
-    );
-
-    console.log(`✅ Booking status updated successfully!`);
-    console.log(`   New Status: ${updatedBooking.status}`);
 
     return res.status(200).json({
       success: true,
-      message: `Booking ${status === "Approved" ? "approved" : status === "Rejected" ? "rejected" : "updated"} successfully`,
-      booking: updatedBooking,
+      message: `Booking ${status} successfully`,
+      booking,
     });
   } catch (error) {
     console.error("❌ Error updating booking status:", error);
@@ -429,36 +360,21 @@ const assignSupervisor = async (req, res) => {
     const { supervisorId } = req.body;
     const { id } = req.params;
 
-    console.log(`📝 Assigning supervisor ${supervisorId} to booking ${id}`);
-
     if (!supervisorId) {
-      return res.status(400).json({
-        success: false,
-        message: "Supervisor ID is required",
-      });
+      return res.status(400).json({ success: false, message: "Supervisor ID is required" });
     }
 
     const booking = await Booking.findById(id);
-
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
 
     if (booking.status !== "Approved") {
-      return res.status(400).json({
-        success: false,
-        message: "Only approved bookings can be assigned a supervisor",
-      });
+      return res.status(400).json({ success: false, message: "Only approved bookings can be assigned a supervisor" });
     }
 
     if (booking.paymentStatus !== "Approved") {
-      return res.status(400).json({
-        success: false,
-        message: "Payment must be approved before assigning a supervisor",
-      });
+      return res.status(400).json({ success: false, message: "Payment must be approved before assigning a supervisor" });
     }
 
     booking.assignedSupervisor = supervisorId;
@@ -467,17 +383,10 @@ const assignSupervisor = async (req, res) => {
 
     await booking.save();
 
-    const updated = await Booking.findById(booking._id).populate(
-      "assignedSupervisor",
-      "name email phone position"
-    );
-
-    console.log(`✅ Supervisor assigned successfully`);
-
     return res.status(200).json({
       success: true,
       message: "Supervisor assigned successfully",
-      booking: updated,
+      booking,
     });
   } catch (error) {
     console.error("❌ Error assigning supervisor:", error);
@@ -490,59 +399,254 @@ const assignSupervisor = async (req, res) => {
 };
 
 // =====================================
-// ⭐ UPDATE WORK STATUS
+// ⭐ ASSIGN DEALERS
 // =====================================
-const updateWorkStatus = async (req, res) => {
+const assignDealers = async (req, res) => {
   try {
-    const { workStatus } = req.body;
+    const { dealerIds } = req.body;
     const { id } = req.params;
 
-    console.log(`📝 Updating work status for booking ${id} to: ${workStatus}`);
-
-    const allowed = ["Assigned", "Ongoing", "Completed"];
-
-    if (!allowed.includes(workStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid work status. Must be: Assigned, Ongoing, or Completed",
-      });
+    if (!dealerIds || !Array.isArray(dealerIds) || dealerIds.length === 0) {
+      return res.status(400).json({ success: false, message: "Dealer IDs are required" });
     }
 
     const booking = await Booking.findById(id);
-
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    booking.assignedDealers = dealerIds;
+    booking.dealersAssignedAt = new Date();
+    
+    if (booking.workStatus === "Assigned") {
+      booking.workStatus = "Preparing";
+    }
+
+    await booking.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealers assigned successfully",
+      booking,
+    });
+  } catch (error) {
+    console.error("❌ Error assigning dealers:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Assignment failed",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================
+// ⭐ UPDATE WORK STATUS (ENHANCED)
+// =====================================
+const updateWorkStatus = async (req, res) => {
+  try {
+    const { workStatus, notes } = req.body;
+    const { id } = req.params;
+
+    const allowed = [
+      "Unassigned", "Assigned", "Preparing", "On Route", 
+      "Setup Complete", "Event Ongoing", "Completed", 
+      "Customer Confirmed", "Disputed", "Closed"
+    ];
+    
+    if (!allowed.includes(workStatus)) {
+      return res.status(400).json({ success: false, message: "Invalid work status" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
 
     booking.workStatus = workStatus;
     
-    if (workStatus === "Ongoing" && !booking.startedAt) {
+    if (workStatus === "Preparing" && !booking.startedAt) {
       booking.startedAt = new Date();
     }
     
     if (workStatus === "Completed") {
       booking.completedAt = new Date();
     }
+    
+    if (workStatus === "Customer Confirmed") {
+      booking.customerConfirmed = true;
+      booking.customerConfirmedAt = new Date();
+    }
+    
+    if (workStatus === "Closed") {
+      booking.closedAt = new Date();
+    }
+    
+    if (workStatus === "On Route" && !booking.departureTime) {
+      booking.departureTime = new Date();
+    }
+    
+    if (workStatus === "Setup Complete" && !booking.setupCompletedAt) {
+      booking.setupCompletedAt = new Date();
+    }
+    
+    if (workStatus === "Setup Complete" && !booking.arrivalTime) {
+      booking.arrivalTime = new Date();
+    }
+    
+    if (notes) {
+      booking.internalNotes = notes;
+    }
 
     await booking.save();
-
-    const updated = await Booking.findById(booking._id).populate(
-      "assignedSupervisor",
-      "name email phone position"
-    );
-
-    console.log(`✅ Work status updated to: ${workStatus}`);
 
     return res.status(200).json({
       success: true,
       message: `Work status updated to ${workStatus}`,
-      booking: updated,
+      booking,
     });
   } catch (error) {
     console.error("❌ Error updating work status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================
+// ⭐ SUBMIT RATING AND FEEDBACK (CUSTOMER) - FIXED
+// =====================================
+const submitRatingAndFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, feedback } = req.body;
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    // Allow rating when workStatus is "Completed" OR "Customer Confirmed"
+    if (booking.workStatus !== "Completed" && booking.workStatus !== "Customer Confirmed") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Event is not ready for rating. Current status: " + booking.workStatus
+      });
+    }
+
+    if (booking.customerRating) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You have already rated this event" 
+      });
+    }
+
+    if (rating && rating >= 1 && rating <= 5) {
+      booking.customerRating = rating;
+    } else {
+      return res.status(400).json({ success: false, message: "Please provide a valid rating (1-5)" });
+    }
+    
+    if (feedback) {
+      booking.customerFeedback = feedback;
+    }
+
+    // Mark as confirmed and update workStatus
+    booking.customerConfirmed = true;
+    booking.customerConfirmedAt = new Date();
+    booking.workStatus = "Customer Confirmed";
+
+    await booking.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Thank you for your feedback!",
+      booking,
+    });
+  } catch (error) {
+    console.error("❌ Error submitting feedback:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================
+// ⭐ UPDATE LOGISTICS
+// =====================================
+const updateLogistics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { departureTime, arrivalTime, setupCompletedAt } = req.body;
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    if (departureTime) booking.departureTime = new Date(departureTime);
+    if (arrivalTime) booking.arrivalTime = new Date(arrivalTime);
+    if (setupCompletedAt) booking.setupCompletedAt = new Date(setupCompletedAt);
+
+    await booking.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Logistics updated successfully",
+      booking,
+    });
+  } catch (error) {
+    console.error("❌ Error updating logistics:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================
+// ⭐ UPDATE FINANCE STATUS
+// =====================================
+const updateFinanceStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { financeStatus, financeApprovedBy } = req.body;
+
+    const validStatuses = ["Not Required", "Pending Approval", "Approved", "Payment Processing", "Paid", "Rejected"];
+    if (!validStatuses.includes(financeStatus)) {
+      return res.status(400).json({ success: false, message: "Invalid finance status" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    booking.financeStatus = financeStatus;
+    
+    if (financeStatus === "Approved") {
+      booking.financeApprovedAt = new Date();
+      if (financeApprovedBy) booking.financeApprovedBy = financeApprovedBy;
+    }
+
+    if (financeStatus === "Paid" && booking.workStatus === "Customer Confirmed") {
+      booking.workStatus = "Closed";
+      booking.closedAt = new Date();
+    }
+
+    await booking.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Finance status updated to ${financeStatus}`,
+      booking,
+    });
+  } catch (error) {
+    console.error("❌ Error updating finance status:", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -557,19 +661,11 @@ const updateWorkStatus = async (req, res) => {
 const deleteBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    console.log(`📝 Deleting booking: ${id}`);
-
     const booking = await Booking.findByIdAndDelete(id);
 
     if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
+      return res.status(404).json({ success: false, message: "Booking not found" });
     }
-
-    console.log(`✅ Booking deleted: ${id}`);
 
     return res.status(200).json({
       success: true,
@@ -585,15 +681,65 @@ const deleteBooking = async (req, res) => {
   }
 };
 
+// =====================================
+// ✅ GET BOOKING STATISTICS
+// =====================================
+const getBookingStats = async (req, res) => {
+  try {
+    const totalBookings = await Booking.countDocuments();
+    const pendingBookings = await Booking.countDocuments({ status: "Pending" });
+    const approvedBookings = await Booking.countDocuments({ status: "Approved" });
+    const completedBookings = await Booking.countDocuments({ workStatus: "Completed" });
+    const customerConfirmed = await Booking.countDocuments({ customerConfirmed: true });
+    const customerRated = await Booking.countDocuments({ customerRating: { $ne: null } });
+    
+    const totalRevenue = await Booking.aggregate([
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]);
+    
+    const averageRating = await Booking.aggregate([
+      { $match: { customerRating: { $ne: null } } },
+      { $group: { _id: null, avg: { $avg: "$customerRating" } } }
+    ]);
+    
+    const workStatusStats = await Booking.aggregate([
+      { $group: { _id: "$workStatus", count: { $sum: 1 } } }
+    ]);
+    
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalBookings,
+        pendingBookings,
+        approvedBookings,
+        completedBookings,
+        customerConfirmed,
+        customerRated,
+        totalRevenue: totalRevenue[0]?.total || 0,
+        averageRating: averageRating[0]?.avg || 0,
+        workStatusStats,
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching stats:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   getBookings,
   getSupervisorBookings,
   getUserBookings,
   getSingleBooking,
-  updatePaymentStatus,      // For Finance - updates payment status
-  updateBookingStatus,      // For Service Manager - updates booking status
+  updatePaymentStatus,
+  updateBookingStatus,
   deleteBooking,
   assignSupervisor,
+  assignDealers,
   updateWorkStatus,
+  submitRatingAndFeedback,
+  updateLogistics,
+  updateFinanceStatus,
+  getBookingStats,
 };
